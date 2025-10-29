@@ -18,82 +18,73 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { CheckCircle, XCircle, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import axios from "axios";
 
-interface Booking {
-  id: string;
-  booking_date: string;
-  start_time: string;
-  end_time: string;
-  status: string;
-  customer_name: string;
-  customer_phone: string;
-  notes: string | null;
-  total_price: number;
-  courts: {
-    name: string;
-    categories: {
-      name: string;
-      icon: string | null;
-    };
-  };
-}
+const API_URL = import.meta.env.VITE_API_URL; // http://localhost:8000/api/
 
 const Bookings = () => {
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [bookings, setBookings] = useState([]);
+  const [statusFilter, setStatusFilter] = useState("all");
 
   useEffect(() => {
     fetchBookings();
   }, [statusFilter]);
 
   const fetchBookings = async () => {
-    let query = supabase
-      .from("bookings")
-      .select("*, courts(name, categories(name, icon))")
-      .order("booking_date", { ascending: false })
-      .order("start_time", { ascending: false });
+    try {
+      const token = localStorage.getItem("token");
+      const { data } = await axios.get(`${API_URL}admin/bookings`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    if (statusFilter !== "all") {
-      query = query.eq("status", statusFilter as any);
-    }
+      // Nếu có filter
+      const filtered =
+        statusFilter === "all"
+          ? data
+          : data.filter((b) => b.status === statusFilter);
 
-    const { data, error } = await query;
-
-    if (error) {
+      setBookings(filtered);
+    } catch (error) {
+      console.error(error);
       toast.error("Lỗi tải danh sách đặt sân");
-    } else {
-      setBookings(data || []);
     }
   };
 
-  const updateBookingStatus = async (id: string, newStatus: string) => {
-    const { error } = await supabase
-      .from("bookings")
-      .update({ status: newStatus as any })
-      .eq("id", id);
-
-    if (error) {
-      toast.error("Lỗi cập nhật trạng thái");
-    } else {
+  const updateBookingStatus = async (id, newStatus) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(
+        `${API_URL}admin/bookings/${id}`,
+        { status: newStatus },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
       toast.success("Cập nhật trạng thái thành công");
       fetchBookings();
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi cập nhật trạng thái");
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status) => {
     const statusConfig = {
-      pending: { label: "Chờ xác nhận", variant: "secondary" as const, icon: Clock },
-      confirmed: { label: "Đã xác nhận", variant: "default" as const, icon: CheckCircle },
-      canceled: { label: "Đã hủy", variant: "destructive" as const, icon: XCircle },
-      completed: { label: "Hoàn thành", variant: "outline" as const, icon: CheckCircle },
+      pending: { label: "Chờ xác nhận", variant: "secondary", icon: Clock },
+      confirmed: { label: "Đã xác nhận", variant: "default", icon: CheckCircle },
+      canceled: { label: "Đã hủy", variant: "destructive", icon: XCircle },
+      completed: { label: "Hoàn thành", variant: "outline", icon: CheckCircle },
     };
 
-    const config = statusConfig[status as keyof typeof statusConfig];
+    const config = statusConfig[status] || statusConfig.pending;
     const Icon = config.icon;
 
     return (
@@ -157,12 +148,12 @@ const Bookings = () => {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <span className="text-lg">
-                        {booking.courts.categories.icon}
+                        {booking.court?.category?.icon}
                       </span>
                       <div>
-                        <div className="font-medium">{booking.courts.name}</div>
+                        <div className="font-medium">{booking.court?.name}</div>
                         <div className="text-sm text-muted-foreground">
-                          {booking.courts.categories.name}
+                          {booking.court?.category?.name}
                         </div>
                       </div>
                     </div>
@@ -179,7 +170,7 @@ const Bookings = () => {
                     )}
                   </TableCell>
                   <TableCell className="font-semibold">
-                    {booking.total_price.toLocaleString()} đ
+                    {booking.total_price?.toLocaleString()} đ
                   </TableCell>
                   <TableCell>{getStatusBadge(booking.status)}</TableCell>
                   <TableCell className="text-right">

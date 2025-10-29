@@ -12,6 +12,9 @@ import Courts from "./pages/admin/Courts";
 import Bookings from "./pages/admin/Bookings";
 import Maintenance from "./pages/admin/Maintenance";
 import NotFound from "./pages/NotFound";
+import 'leaflet/dist/leaflet.css';
+
+
 
 const queryClient = new QueryClient();
 

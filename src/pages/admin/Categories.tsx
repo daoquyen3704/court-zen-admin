@@ -21,22 +21,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2 } from "lucide-react";
+import axios from "axios";
 
-interface Category {
-  id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  icon: string | null;
-}
+const API_URL = import.meta.env.VITE_API_URL; // http://localhost:8000/api/
 
 const Categories = () => {
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState([]);
   const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     slug: "",
@@ -49,48 +43,45 @@ const Categories = () => {
   }, []);
 
   const fetchCategories = async () => {
-    const { data, error } = await supabase
-      .from("categories")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      toast.error("Lỗi tải danh mục");
-    } else {
+    try {
+      const token = localStorage.getItem("token");
+      const { data } = await axios.get(`${API_URL}admin/categories`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       setCategories(data || []);
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi tải danh mục");
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    const token = localStorage.getItem("token");
 
-    if (editingId) {
-      const { error } = await supabase
-        .from("categories")
-        .update(formData)
-        .eq("id", editingId);
-
-      if (error) {
-        toast.error("Lỗi cập nhật danh mục");
-      } else {
+    try {
+      if (editingId) {
+        await axios.put(`${API_URL}admin/categories/${editingId}`, formData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         toast.success("Cập nhật danh mục thành công");
-        fetchCategories();
-        resetForm();
-      }
-    } else {
-      const { error } = await supabase.from("categories").insert(formData);
-
-      if (error) {
-        toast.error("Lỗi thêm danh mục");
       } else {
+        await axios.post(`${API_URL}admin/categories`, formData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         toast.success("Thêm danh mục thành công");
-        fetchCategories();
-        resetForm();
       }
+      fetchCategories();
+      resetForm();
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi lưu danh mục");
     }
   };
 
-  const handleEdit = (category: Category) => {
+  const handleEdit = (category) => {
     setEditingId(category.id);
     setFormData({
       name: category.name,
@@ -101,16 +92,19 @@ const Categories = () => {
     setOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id) => {
     if (!confirm("Bạn có chắc muốn xóa danh mục này?")) return;
+    const token = localStorage.getItem("token");
 
-    const { error } = await supabase.from("categories").delete().eq("id", id);
-
-    if (error) {
-      toast.error("Lỗi xóa danh mục");
-    } else {
+    try {
+      await axios.delete(`${API_URL}admin/categories/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       toast.success("Xóa danh mục thành công");
       fetchCategories();
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi xóa danh mục");
     }
   };
 

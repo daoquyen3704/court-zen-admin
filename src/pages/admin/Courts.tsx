@@ -29,79 +29,63 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, MapPin } from "lucide-react";
+import axios from "axios";
+import MapPicker from "@/components/MapPicker";
+import AddressSearch from "@/components/AddressSearch";
 
-interface Court {
-  id: string;
-  name: string;
-  description: string | null;
-  image_url: string | null;
-  price_per_hour: number;
-  latitude: number | null;
-  longitude: number | null;
-  is_active: boolean;
-  category_id: string;
-  categories: {
-    name: string;
-    icon: string | null;
-  };
-}
-
-interface Category {
-  id: string;
-  name: string;
-  icon: string | null;
-}
+const API_URL = import.meta.env.VITE_API_URL;
 
 const Courts = () => {
-  const [courts, setCourts] = useState<Court[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [courts, setCourts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     name: "",
+    category_id: "",
     description: "",
-    image_url: "",
     price_per_hour: "",
+    location: "",
     latitude: "",
     longitude: "",
+    address: "",
     is_active: true,
-    category_id: "",
   });
+
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
     fetchCourts();
     fetchCategories();
   }, []);
 
+  // 🟢 Load danh mục
   const fetchCategories = async () => {
-    const { data, error } = await supabase
-      .from("categories")
-      .select("id, name, icon")
-      .order("name");
-
-    if (error) {
+    try {
+      const { data } = await axios.get(`${API_URL}admin/categories`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setCategories(data.data || data);
+    } catch {
       toast.error("Lỗi tải danh mục");
-    } else {
-      setCategories(data || []);
     }
   };
 
+  // 🟢 Load danh sách sân
   const fetchCourts = async () => {
-    const { data, error } = await supabase
-      .from("courts")
-      .select("*, categories(name, icon)")
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    try {
+      const { data } = await axios.get(`${API_URL}admin/courts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setCourts(data.data || data);
+    } catch {
       toast.error("Lỗi tải danh sách sân");
-    } else {
-      setCourts(data || []);
     }
   };
 
+  // 🟢 Thêm / Cập nhật sân
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -112,70 +96,68 @@ const Courts = () => {
       longitude: formData.longitude ? parseFloat(formData.longitude) : null,
     };
 
-    if (editingId) {
-      const { error } = await supabase
-        .from("courts")
-        .update(courtData)
-        .eq("id", editingId);
-
-      if (error) {
-        toast.error("Lỗi cập nhật sân");
-      } else {
+    try {
+      if (editingId) {
+        await axios.put(`${API_URL}admin/courts/${editingId}`, courtData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         toast.success("Cập nhật sân thành công");
-        fetchCourts();
-        resetForm();
-      }
-    } else {
-      const { error } = await supabase.from("courts").insert(courtData);
-
-      if (error) {
-        toast.error("Lỗi thêm sân");
       } else {
-        toast.success("Thêm sân thành công");
-        fetchCourts();
-        resetForm();
+        await axios.post(`${API_URL}admin/courts`, courtData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        toast.success("Thêm sân mới thành công");
       }
+      fetchCourts();
+      resetForm();
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi lưu thông tin sân");
     }
   };
 
-  const handleEdit = (court: Court) => {
+  // 🟢 Sửa sân
+  const handleEdit = (court: any) => {
     setEditingId(court.id);
     setFormData({
       name: court.name,
+      category_id: court.category_id?.toString() || "",
       description: court.description || "",
-      image_url: court.image_url || "",
-      price_per_hour: court.price_per_hour.toString(),
+      price_per_hour: court.price_per_hour?.toString() || "",
+      location: court.location || "",
       latitude: court.latitude?.toString() || "",
       longitude: court.longitude?.toString() || "",
+      address: court.address || "",
       is_active: court.is_active,
-      category_id: court.category_id,
     });
     setOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
+  // 🟢 Xóa sân
+  const handleDelete = async (id: number) => {
     if (!confirm("Bạn có chắc muốn xóa sân này?")) return;
-
-    const { error } = await supabase.from("courts").delete().eq("id", id);
-
-    if (error) {
-      toast.error("Lỗi xóa sân");
-    } else {
-      toast.success("Xóa sân thành công");
+    try {
+      await axios.delete(`${API_URL}admin/courts/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success("Đã xóa sân thành công");
       fetchCourts();
+    } catch {
+      toast.error("Lỗi khi xóa sân");
     }
   };
 
   const resetForm = () => {
     setFormData({
       name: "",
+      category_id: "",
       description: "",
-      image_url: "",
       price_per_hour: "",
+      location: "",
       latitude: "",
       longitude: "",
+      address: "",
       is_active: true,
-      category_id: "",
     });
     setEditingId(null);
     setOpen(false);
@@ -184,6 +166,7 @@ const Courts = () => {
   return (
     <AdminLayout>
       <div className="space-y-6">
+        {/* Header */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold">Quản lý sân</h1>
@@ -195,21 +178,21 @@ const Courts = () => {
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => resetForm()}>
-                <Plus className="mr-2 h-4 w-4" />
-                Thêm sân
+                <Plus className="mr-2 h-4 w-4" /> Thêm sân
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editingId ? "Sửa thông tin sân" : "Thêm sân mới"}
                 </DialogTitle>
                 <DialogDescription>
-                  Điền đầy đủ thông tin sân thể thao
+                  Nhập thông tin chi tiết sân thể thao
                 </DialogDescription>
               </DialogHeader>
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* 🏷️ Tên & Danh mục */}
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="name">Tên sân *</Label>
@@ -222,9 +205,8 @@ const Courts = () => {
                       required
                     />
                   </div>
-
                   <div className="space-y-2">
-                    <Label htmlFor="category">Danh mục *</Label>
+                    <Label>Danh mục *</Label>
                     <Select
                       value={formData.category_id}
                       onValueChange={(value) =>
@@ -236,7 +218,7 @@ const Courts = () => {
                       </SelectTrigger>
                       <SelectContent>
                         {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
+                          <SelectItem key={cat.id} value={cat.id.toString()}>
                             {cat.icon} {cat.name}
                           </SelectItem>
                         ))}
@@ -245,10 +227,10 @@ const Courts = () => {
                   </div>
                 </div>
 
+                {/* 📝 Mô tả */}
                 <div className="space-y-2">
-                  <Label htmlFor="description">Mô tả</Label>
+                  <Label>Mô tả</Label>
                   <Textarea
-                    id="description"
                     value={formData.description}
                     onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
@@ -257,25 +239,11 @@ const Courts = () => {
                   />
                 </div>
 
+                {/* 💰 Giá thuê */}
                 <div className="space-y-2">
-                  <Label htmlFor="image_url">URL hình ảnh</Label>
+                  <Label>Giá thuê (VNĐ/giờ)</Label>
                   <Input
-                    id="image_url"
-                    type="url"
-                    value={formData.image_url}
-                    onChange={(e) =>
-                      setFormData({ ...formData, image_url: e.target.value })
-                    }
-                    placeholder="https://example.com/image.jpg"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="price">Giá thuê (VNĐ/giờ) *</Label>
-                  <Input
-                    id="price"
                     type="number"
-                    step="0.01"
                     value={formData.price_per_hour}
                     onChange={(e) =>
                       setFormData({
@@ -287,47 +255,91 @@ const Courts = () => {
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                {/* 🏙️ Vị trí / Địa chỉ */}
+                <div className="space-y-2">
+                  <Label>Địa chỉ (OpenStreetMap)</Label>
+                  <AddressSearch
+                    onSelect={(lat, lng, address) =>
+                      setFormData({
+                        ...formData,
+                        address,
+                        latitude: lat.toString(),
+                        longitude: lng.toString(),
+                      })
+                    }
+                  />
+                  {formData.address && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {formData.address}
+                    </p>
+                  )}
+                </div>
+
+                {/* 📍 Nhập tọa độ thủ công */}
+                <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
-                    <Label htmlFor="latitude">Vĩ độ (Latitude)</Label>
+                    <Label>Latitude</Label>
                     <Input
-                      id="latitude"
-                      type="number"
-                      step="any"
                       value={formData.latitude}
                       onChange={(e) =>
                         setFormData({ ...formData, latitude: e.target.value })
                       }
-                      placeholder="21.028511"
+                      placeholder="21.0285"
                     />
                   </div>
-
                   <div className="space-y-2">
-                    <Label htmlFor="longitude">Kinh độ (Longitude)</Label>
+                    <Label>Longitude</Label>
                     <Input
-                      id="longitude"
-                      type="number"
-                      step="any"
                       value={formData.longitude}
                       onChange={(e) =>
                         setFormData({ ...formData, longitude: e.target.value })
                       }
-                      placeholder="105.804817"
+                      placeholder="105.8542"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Location (mô tả ngắn)</Label>
+                    <Input
+                      value={formData.location}
+                      onChange={(e) =>
+                        setFormData({ ...formData, location: e.target.value })
+                      }
+                      placeholder="VD: Gần CV Thống Nhất"
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                {/* 🗺️ Bản đồ */}
+                {(formData.latitude || formData.longitude) && (
+                  <div className="space-y-2">
+                    <Label>Bản đồ vị trí</Label>
+                    <MapPicker
+                      latitude={parseFloat(formData.latitude)}
+                      longitude={parseFloat(formData.longitude)}
+                      onChange={(lat, lng, address) =>
+                        setFormData({
+                          ...formData,
+                          latitude: lat.toString(),
+                          longitude: lng.toString(),
+                          address: address || formData.address,
+                          name: address ? `Sân tại ${address.split(",")[0]}` : formData.name,
+                        })
+                      }
+                    />
+
+                  </div>
+                )}
+
+                {/* ✅ Trạng thái */}
+                <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    id="is_active"
                     checked={formData.is_active}
                     onChange={(e) =>
                       setFormData({ ...formData, is_active: e.target.checked })
                     }
-                    className="rounded"
                   />
-                  <Label htmlFor="is_active">Sân đang hoạt động</Label>
+                  <Label>Sân đang hoạt động</Label>
                 </div>
 
                 <Button type="submit" className="w-full">
@@ -338,11 +350,12 @@ const Courts = () => {
           </Dialog>
         </div>
 
+        {/* 📋 Danh sách sân */}
         <Card className="border-0 shadow-lg">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Sân</TableHead>
+                <TableHead>Tên sân</TableHead>
                 <TableHead>Danh mục</TableHead>
                 <TableHead>Giá/giờ</TableHead>
                 <TableHead>Vị trí</TableHead>
@@ -354,40 +367,23 @@ const Courts = () => {
               {courts.map((court) => (
                 <TableRow key={court.id}>
                   <TableCell>
-                    <div className="flex items-center gap-3">
-                      {court.image_url && (
-                        <img
-                          src={court.image_url}
-                          alt={court.name}
-                          className="w-12 h-12 rounded object-cover"
-                        />
-                      )}
-                      <div>
-                        <div className="font-medium">{court.name}</div>
-                        <div className="text-sm text-muted-foreground truncate max-w-xs">
-                          {court.description}
-                        </div>
-                      </div>
+                    <div className="font-medium">{court.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {court.description}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <span className="text-lg">
-                      {court.categories.icon} {court.categories.name}
-                    </span>
-                  </TableCell>
+                  <TableCell>{court.category?.name}</TableCell>
                   <TableCell className="font-semibold">
-                    {court.price_per_hour.toLocaleString()} đ
+                    {court.price_per_hour?.toLocaleString()} đ
                   </TableCell>
                   <TableCell>
                     {court.latitude && court.longitude ? (
                       <a
                         href={`https://www.google.com/maps?q=${court.latitude},${court.longitude}`}
                         target="_blank"
-                        rel="noopener noreferrer"
                         className="flex items-center gap-1 text-primary hover:underline"
                       >
-                        <MapPin className="h-4 w-4" />
-                        Xem bản đồ
+                        <MapPin className="h-4 w-4" /> Xem bản đồ
                       </a>
                     ) : (
                       <span className="text-muted-foreground">Chưa có</span>

@@ -10,8 +10,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import axios from "axios";
 
 const menuItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
@@ -21,17 +21,32 @@ const menuItems = [
   { title: "Bảo trì", url: "/admin/maintenance", icon: Wrench },
 ];
 
+const API_URL = import.meta.env.VITE_API_URL; // http://localhost:8000/api/
+
 export function AdminSidebar() {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast.error("Lỗi đăng xuất");
-    } else {
-      toast.success("Đăng xuất thành công");
-      navigate("/auth");
+    const token = localStorage.getItem("token");
+
+    try {
+      // ✅ Gọi API logout nếu backend có route /api/admin/logout
+      await axios.post(
+        `${API_URL}admin/logout`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+    } catch (error) {
+      // Nếu không có route logout thì chỉ cần xóa token là được
+      console.warn("Không có API logout, fallback về xóa token");
     }
+
+    // Xóa token và chuyển hướng
+    localStorage.removeItem("token");
+    toast.success("Đăng xuất thành công");
+    navigate("/auth");
   };
 
   return (
@@ -67,7 +82,7 @@ export function AdminSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
-              
+
               <SidebarMenuItem>
                 <SidebarMenuButton asChild>
                   <button

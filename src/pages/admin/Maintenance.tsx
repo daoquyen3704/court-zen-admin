@@ -28,39 +28,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Trash2, Wrench } from "lucide-react";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
+import axios from "axios";
 
-interface MaintenanceBlock {
-  id: string;
-  block_date: string;
-  start_time: string;
-  end_time: string;
-  reason: string | null;
-  courts: {
-    name: string;
-    categories: {
-      name: string;
-      icon: string | null;
-    };
-  };
-}
-
-interface Court {
-  id: string;
-  name: string;
-  categories: {
-    name: string;
-    icon: string | null;
-  };
-}
+const API_URL = import.meta.env.VITE_API_URL; // http://localhost:8000/api/
 
 const Maintenance = () => {
-  const [blocks, setBlocks] = useState<MaintenanceBlock[]>([]);
-  const [courts, setCourts] = useState<Court[]>([]);
+  const [blocks, setBlocks] = useState([]);
+  const [courts, setCourts] = useState([]);
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState({
     court_id: "",
@@ -76,60 +54,61 @@ const Maintenance = () => {
   }, []);
 
   const fetchCourts = async () => {
-    const { data, error } = await supabase
-      .from("courts")
-      .select("id, name, categories(name, icon)")
-      .eq("is_active", true)
-      .order("name");
-
-    if (error) {
+    try {
+      const token = localStorage.getItem("token");
+      const { data } = await axios.get(`${API_URL}admin/courts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setCourts(data.filter((court) => court.is_active));
+    } catch (error) {
+      console.error(error);
       toast.error("Lỗi tải danh sách sân");
-    } else {
-      setCourts(data || []);
     }
   };
 
   const fetchBlocks = async () => {
-    const { data, error } = await supabase
-      .from("maintenance_blocks")
-      .select("*, courts(name, categories(name, icon))")
-      .order("block_date", { ascending: false })
-      .order("start_time", { ascending: false });
-
-    if (error) {
-      toast.error("Lỗi tải danh sách bảo trì");
-    } else {
+    try {
+      const token = localStorage.getItem("token");
+      const { data } = await axios.get(`${API_URL}admin/maintenance-blocks`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setBlocks(data || []);
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi tải danh sách bảo trì");
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    const token = localStorage.getItem("token");
 
-    const { error } = await supabase.from("maintenance_blocks").insert(formData);
-
-    if (error) {
-      toast.error("Lỗi thêm lịch bảo trì");
-    } else {
+    try {
+      await axios.post(`${API_URL}admin/maintenance-blocks`, formData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       toast.success("Thêm lịch bảo trì thành công");
       fetchBlocks();
       resetForm();
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi thêm lịch bảo trì");
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id) => {
     if (!confirm("Bạn có chắc muốn xóa lịch bảo trì này?")) return;
+    const token = localStorage.getItem("token");
 
-    const { error } = await supabase
-      .from("maintenance_blocks")
-      .delete()
-      .eq("id", id);
-
-    if (error) {
-      toast.error("Lỗi xóa lịch bảo trì");
-    } else {
+    try {
+      await axios.delete(`${API_URL}admin/maintenance-blocks/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       toast.success("Xóa lịch bảo trì thành công");
       fetchBlocks();
+    } catch (error) {
+      console.error(error);
+      toast.error("Lỗi xóa lịch bảo trì");
     }
   };
 
@@ -185,9 +164,9 @@ const Maintenance = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {courts.map((court) => (
-                        <SelectItem key={court.id} value={court.id}>
-                          {court.categories.icon} {court.name} -{" "}
-                          {court.categories.name}
+                        <SelectItem key={court.id} value={court.id.toString()}>
+                          {court.category?.icon} {court.name} -{" "}
+                          {court.category?.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -243,7 +222,7 @@ const Maintenance = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, reason: e.target.value })
                     }
-                    placeholder="Vd: Sửa chữa lưới, bảo trì mặt sân..."
+                    placeholder="VD: Sửa lưới, thay cỏ, vệ sinh..."
                     rows={3}
                   />
                 </div>
@@ -274,10 +253,12 @@ const Maintenance = () => {
                     <div className="flex items-center gap-2">
                       <Wrench className="h-4 w-4 text-warning" />
                       <div>
-                        <div className="font-medium">{block.courts.name}</div>
+                        <div className="font-medium">
+                          {block.court?.name}
+                        </div>
                         <div className="text-sm text-muted-foreground">
-                          {block.courts.categories.icon}{" "}
-                          {block.courts.categories.name}
+                          {block.court?.category?.icon}{" "}
+                          {block.court?.category?.name}
                         </div>
                       </div>
                     </div>

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
 import { LayoutDashboard, MapPin, Calendar, Tags } from "lucide-react";
+import axios from "axios";
+
+const API_URL = import.meta.env.VITE_API_URL; // http://localhost:8000/api/
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -17,19 +19,17 @@ const Dashboard = () => {
   }, []);
 
   const fetchStats = async () => {
-    const [courtsRes, categoriesRes, bookingsRes, pendingRes] = await Promise.all([
-      supabase.from("courts").select("id", { count: "exact", head: true }),
-      supabase.from("categories").select("id", { count: "exact", head: true }),
-      supabase.from("bookings").select("id", { count: "exact", head: true }),
-      supabase.from("bookings").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    ]);
-
-    setStats({
-      totalCourts: courtsRes.count || 0,
-      totalCategories: categoriesRes.count || 0,
-      totalBookings: bookingsRes.count || 0,
-      pendingBookings: pendingRes.count || 0,
-    });
+    try {
+      const token = localStorage.getItem("token");
+      const { data } = await axios.get(`${API_URL}admin/dashboard`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      setStats(data);
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const statCards = [

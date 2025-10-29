@@ -1,6 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,11 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { z } from "zod";
+import axios from "axios";
 
 const authSchema = z.object({
   email: z.string().email("Email không hợp lệ"),
   password: z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự"),
 });
+
+const API_URL = import.meta.env.VITE_API_URL; // vd: http://localhost:8000/api/
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -20,71 +22,56 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        navigate("/admin");
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        navigate("/admin");
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
-
+  // 🟩 Đăng nhập Laravel
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     try {
       authSchema.parse({ email, password });
       setLoading(true);
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data } = await axios.post(`${API_URL}admin/login`, { email, password });
 
-      if (error) throw error;
+      const token = data.access_token;
+      if (!token) {
+        toast.error("Không nhận được token từ server");
+        setLoading(false);
+        return;
+      }
 
+      localStorage.setItem("token", token);
       toast.success("Đăng nhập thành công!");
+      navigate("/admin");
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else {
-        toast.error(error.message || "Đăng nhập thất bại");
+        console.error(error);
+        toast.error(error.response?.data?.message || "Đăng nhập thất bại!");
       }
     } finally {
       setLoading(false);
     }
   };
 
+  // 🟧 Đăng ký Laravel
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     try {
       authSchema.parse({ email, password });
       setLoading(true);
 
-      const { error } = await supabase.auth.signUp({
+      await axios.post(`${API_URL}admin/register`, {
+        name: email.split("@")[0],
         email,
         password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/admin`,
-        },
       });
 
-      if (error) throw error;
-
-      toast.success("Đăng ký thành công! Bạn có thể đăng nhập ngay.");
+      toast.success("Đăng ký thành công! Vui lòng đăng nhập.");
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         toast.error(error.errors[0].message);
       } else {
-        toast.error(error.message || "Đăng ký thất bại");
+        toast.error(error.response?.data?.message || "Đăng ký thất bại!");
       }
     } finally {
       setLoading(false);
@@ -102,6 +89,7 @@ const Auth = () => {
             Hệ thống quản lý đặt sân thể thao
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
@@ -109,8 +97,9 @@ const Auth = () => {
               <TabsTrigger value="signup">Đăng ký</TabsTrigger>
             </TabsList>
 
+            {/* 🟩 Đăng nhập */}
             <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-4">
+              <form onSubmit={handleLogin} className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label htmlFor="login-email">Email</Label>
                   <Input
@@ -139,8 +128,9 @@ const Auth = () => {
               </form>
             </TabsContent>
 
+            {/* 🟧 Đăng ký */}
             <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-4">
+              <form onSubmit={handleSignup} className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
                   <Input
